@@ -206,50 +206,63 @@ class NextPage extends StatefulWidget {
 
 class _NextPageState extends State<NextPage> {
   int _selectedIndex = 0;
-
-  // 入力値を保持する変数
   DisasterType? _selectedDisaster;
   String _description = '';
   bool _isImportant = false;
-  File? _selectedImage;
-
+  int _importance = 5;
+  List<File> _selectedImages = [];
 
   Future<void> _pickImage() async {
     if (kIsWeb) {
-      // Web環境なら、Web対応のパッケージで処理
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      // Web環境なら、FilePickerを使用
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+      );
       if (result != null && result.files.isNotEmpty) {
-        // Webの場合、pathがnullの場合はbytesから画像を扱うなど別途処理が必要
+        setState(() {
+          // pathがnullの場合はbytesからの変換処理が必要（Web特有の対応）
+          // ここではpathがある前提の例とします。
+          _selectedImages = result.files
+              .where((f) => f.path != null)
+              .map((f) => File(f.path!))
+              .toList();
+        });
       }
     } else {
       // WebではないのでPlatform判定可能
       if (Platform.isAndroid || Platform.isIOS) {
-        // モバイルはimage_pickerを使用
+        // モバイルはimage_pickerを使用 (複数画像選択)
         final picker = ImagePicker();
-        final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-        if (pickedFile != null) {
+        final pickedFiles = await picker.pickMultiImage();
+        if (pickedFiles.isNotEmpty) {
           setState(() {
-            _selectedImage = File(pickedFile.path);
+            _selectedImages = pickedFiles.map((f) => File(f.path)).toList();
           });
         }
       } else {
         // デスクトップ(Windows/Linux/macOS)用
-        final result = await FilePicker.platform.pickFiles(type: FileType.image);
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: true,
+        );
         if (result != null && result.files.isNotEmpty) {
           setState(() {
-            _selectedImage = File(result.files.first.path!);
+            _selectedImages = result.files
+                .where((f) => f.path != null)
+                .map((f) => File(f.path!))
+                .toList();
           });
         }
       }
     }
   }
 
-
   Widget _buildReportForm() {
-    // DisasterType用のDropdownMenuEntryを作成
     final List<DropdownMenuEntry<DisasterType>> disasterEntries = DisasterType.values
         .map((d) => DropdownMenuEntry<DisasterType>(value: d, label: d.label))
         .toList();
+        
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -291,8 +304,27 @@ class _NextPageState extends State<NextPage> {
               });
             },
           ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            const Text('重要度:'),
+            Expanded(
+              child: Slider(
+                value: _importance.toDouble(),
+                min: 1,
+                max: 10,
+                divisions: 9,
+                label: _importance.toString(),
+                onChanged: (double value) {
+                  setState(() {
+                    _importance = value.toInt();
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
           const SizedBox(height: 16),
-          // 画像アップロードボタンとプレビュー
           Row(
             children: [
               ElevatedButton(
@@ -300,39 +332,48 @@ class _NextPageState extends State<NextPage> {
                 child: const Text('画像を選択'),
               ),
               const SizedBox(width: 16),
-              _selectedImage == null
-                  ? const Text('画像が選択されていません')
-                  : Row(
-                      children: [
-                        Image.file(
-                          _selectedImage!,
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            setState(() {
-                              _selectedImage = null;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
+              Expanded(
+                child: _selectedImages.isEmpty
+                    ? const Text('画像が選択されていません')
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedImages.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final imageFile = entry.value;
+                          return Stack(
+                            alignment: Alignment.topRight,
+                            children: [
+                              Image.file(
+                                imageFile,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedImages.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           // 送信ボタン
           ElevatedButton(
             onPressed: () {
-              // ここで実際の送信処理を記述
-              // 例: APIへPOST、バリデーションチェックなど
-              // 簡易的に入力値を確認表示するなど
               debugPrint('Disaster: $_selectedDisaster');
               debugPrint('Description: $_description');
               debugPrint('Is Important: $_isImportant');
-              debugPrint('Image: $_selectedImage');
+              debugPrint('Importance: $_importance');
+              debugPrint('Images: $_selectedImages');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('報告を送信しました。')),
               );
@@ -369,6 +410,13 @@ class _NextPageState extends State<NextPage> {
           setState(() {
             _selectedIndex = index;
           });
+          if (index == 0) {
+            _selectedDisaster = null;
+            _description = '';
+            _isImportant = false;
+            _importance = 5;
+            _selectedImages = [];
+          }
         },
         destinations: const [
           NavigationDestination(

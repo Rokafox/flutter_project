@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() {
   runApp(const MyApp());
@@ -22,7 +23,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const LoginScreen(),
-      debugShowCheckedModeBanner: true, // デバッグバナーを非表示
+      debugShowCheckedModeBanner: true,
     );
   }
 }
@@ -83,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           // ログイン成功時は次の画面へ遷移
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const NextPage()),
@@ -190,7 +192,8 @@ enum DisasterType {
   volcanicEruption('火山噴火'),
   humanerror('人為事故'),
   bearassault('熊襲撃'),
-  militaryattack('軍事'),
+  militaryattack('軍事襲撃'),
+  nuclearcontamination('核汚染'),
   other('その他');
 
   final String label;
@@ -211,6 +214,11 @@ class _NextPageState extends State<NextPage> {
   bool _isImportant = false;
   int _importance = 5;
   List<File> _selectedImages = [];
+  // 取得した位置情報を格納するための変数（任意）
+  String _locationMessage = '位置情報は取得されていません';
+  String _manualLatitude = '';
+  String _manualLongitude = '';
+  String _disasterSubmitResponseMessage = '';
 
   Future<void> _pickImage() async {
     if (kIsWeb) {
@@ -256,6 +264,72 @@ class _NextPageState extends State<NextPage> {
         }
       }
     }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      if (kIsWeb) {
+        // Web 用の位置情報取得ロジック (Geolocator は Web でも動作するが、
+        // ユーザーがブラウザで位置情報利用を許可する必要があります。)
+        // そのままでも動作しますが、環境によっては別の実装が必要となる場合あり
+        Position position = await _determinePosition();
+        setState(() {
+          _locationMessage =
+              '緯度: ${position.latitude}, 経度: ${position.longitude} (Web)';
+          _manualLatitude = position.latitude.toString();
+          _manualLongitude = position.longitude.toString();
+        });
+      } else {
+        if (Platform.isAndroid || Platform.isIOS) {
+          Position position = await _determinePosition();
+          setState(() {
+            _locationMessage =
+                '緯度: ${position.latitude}, 経度: ${position.longitude} (モバイル)';
+            _manualLatitude = position.latitude.toString();
+            _manualLongitude = position.longitude.toString();
+          });
+        } else {
+          // linux/windows desktop usually does not have GPS chip, so make no sense to get location
+          setState(() {
+            _locationMessage = 'このプラットフォームでは未対応です';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('位置情報の取得に失敗しました: $e');
+      setState(() {
+        _locationMessage = '位置情報の取得に失敗しました';
+      });
+    }
+  }
+
+  Future<Position> _determinePosition() async {
+    // 位置情報サービスが有効かチェック
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // 位置情報サービスが無効の場合、ユーザーへ促す
+      throw Exception('位置情報サービスが無効になっています。');
+    }
+
+    // 位置情報権限の状態を確認
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      // 権限がなければユーザーに許可を求める
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // それでも拒否された場合
+        throw Exception('位置情報の権限が拒否されました。');
+      }
+    }
+    
+    // 永久に拒否されている場合
+    if (permission == LocationPermission.deniedForever) {
+      // 権限許可画面を開くなどの案内が必要
+      throw Exception('位置情報の権限が永久に拒否されています。');
+    }
+
+    // ここまで来れば位置情報を取得できる
+    return await Geolocator.getCurrentPosition();
   }
 
   Widget _buildReportForm() {
@@ -366,6 +440,43 @@ class _NextPageState extends State<NextPage> {
             ],
           ),
           const SizedBox(height: 16),
+          // 位置情報取得ボタン & メッセージ
+          ElevatedButton(
+            onPressed: () async {
+              await _getCurrentLocation();
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   SnackBar(content: Text(_locationMessage)),
+              // );
+            },
+            child: const Text('現在地を取得'),
+          ),
+          const SizedBox(height: 8),
+          Text(_locationMessage),
+
+          const SizedBox(height: 16),
+          TextFormField(
+            decoration: const InputDecoration(
+              labelText: '緯度',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (value) {
+              _manualLatitude = value;
+            },
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            decoration: const InputDecoration(
+              labelText: '経度',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (value) {
+              _manualLongitude = value;
+            },
+          ),
+
+          const SizedBox(height: 16),
           // 送信ボタン
           ElevatedButton(
             onPressed: () {
@@ -374,12 +485,14 @@ class _NextPageState extends State<NextPage> {
               debugPrint('Is Important: $_isImportant');
               debugPrint('Importance: $_importance');
               debugPrint('Images: $_selectedImages');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('報告を送信しました。')),
-              );
+              debugPrint('Manual Position -> Lat: $_manualLatitude, Lng: $_manualLongitude');
+              setState(() {
+                _disasterSubmitResponseMessage = '送信しました';
+              });
             },
             child: const Text('送信'),
           ),
+          Text(_disasterSubmitResponseMessage),
         ],
       ),
     );
@@ -416,6 +529,10 @@ class _NextPageState extends State<NextPage> {
             _isImportant = false;
             _importance = 5;
             _selectedImages = [];
+            _locationMessage = '位置情報は取得されていません';
+            _manualLatitude = '';
+            _manualLongitude = '';
+            _disasterSubmitResponseMessage = '';
           }
         },
         destinations: const [

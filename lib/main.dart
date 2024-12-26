@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 void main() {
   runApp(const MyApp());
@@ -623,13 +625,91 @@ class _NextPageState extends State<NextPage> {
     );
   }
 
+  // for building map
+  final MapController _mapController = MapController();
+  // 初期位置・ズーム
+  final LatLng _initialCenter = const LatLng(38.0, 140.0);
+  final double _initialZoom = 6.0;
+  List<Marker> _markers = [];
+
+  Widget _buildMap() {
+    return Column(
+      children: [
+        // 「request data」ボタン
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  // setState(() {});
+                },
+                child: const Text('データを取得'),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loadSampleData,
+                child: const Text('サンプルデータを読み込む'),
+              ),
+            ],
+          ),
+        ),
+        // flutter_map を利用した地図ウィジェット
+        Expanded(
+          child: FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _initialCenter,
+              initialZoom: _initialZoom,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+              ),
+              MarkerLayer(
+                markers: _markers,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _loadSampleData() {
+    setState(() {
+      // 事前に定義しておいたマーカーのリストを格納する
+      _markers = [
+        Marker(
+          point: LatLng(35.6895, 139.6917), // 東京
+          width: 80,
+          height: 80,
+          child: FlutterLogo(),
+        ),
+        Marker(
+          point: LatLng(35.0116, 135.7680), // 京都
+          width: 80,
+          height: 80,
+          child: FlutterLogo(),
+        ),
+        Marker(
+          point: LatLng(43.0618, 141.3545), // 札幌
+          width: 80,
+          height: 80,
+          child: FlutterLogo(),
+        ),
+      ];
+    });
+  }
+
   Widget _buildPageContent() {
     switch (_selectedIndex) {
       case 0:
         // 災害情報報告用フォームを返す
         return _buildReportForm();
       case 1:
-        return const Center(child: Text('報告一覧'));
+        return _buildMap();
       default:
         return const Center(child: Text('不明な画面'));
     }
@@ -659,6 +739,12 @@ class _NextPageState extends State<NextPage> {
             _manualLatitude = '';
             _manualLongitude = '';
             _disasterSubmitResponseMessage = '';
+          } else if (index == 1) {
+            // ここで地図の初期表示位置を設定
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _mapController.move(_initialCenter, _initialZoom);
+            });
+            _markers = [];
           }
         },
         destinations: const [
@@ -668,8 +754,8 @@ class _NextPageState extends State<NextPage> {
             label: '災害情報報告',
           ),
           NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore),
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
             label: '報告一覧',
           ),
         ],

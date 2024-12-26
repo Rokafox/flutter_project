@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -69,8 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     
     try {
-      // ここで実際のAPIエンドポイントを指定
-      // final url = Uri.parse('https://example.com/login');
       // use a local server for testing
       final url = Uri.parse('http://localhost:8000/login');  
       final response = await http.post(
@@ -214,26 +213,26 @@ class _NextPageState extends State<NextPage> {
   bool _isImportant = false;
   int _importance = 5;
   List<File> _selectedImages = [];
+  List<Uint8List> _selectedImageBytes = [];
   // 取得した位置情報を格納するための変数（任意）
   String _locationMessage = '位置情報は取得されていません';
   String _manualLatitude = '';
   String _manualLongitude = '';
   String _disasterSubmitResponseMessage = '';
+  final TextEditingController _latitudeController = TextEditingController();
+  final TextEditingController _longitudeController = TextEditingController();
 
   Future<void> _pickImage() async {
     if (kIsWeb) {
-      // Web環境なら、FilePickerを使用
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: true,
       );
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          // pathがnullの場合はbytesからの変換処理が必要（Web特有の対応）
-          // ここではpathがある前提の例とします。
-          _selectedImages = result.files
-              .where((f) => f.path != null)
-              .map((f) => File(f.path!))
+          _selectedImageBytes = result.files
+              .where((f) => f.bytes != null)
+              .map((f) => f.bytes!)
               .toList();
         });
       }
@@ -278,6 +277,9 @@ class _NextPageState extends State<NextPage> {
               '緯度: ${position.latitude}, 経度: ${position.longitude} (Web)';
           _manualLatitude = position.latitude.toString();
           _manualLongitude = position.longitude.toString();
+          // コントローラへ反映
+          _latitudeController.text = _manualLatitude;
+          _longitudeController.text = _manualLongitude;
         });
       } else {
         if (Platform.isAndroid || Platform.isIOS) {
@@ -287,6 +289,9 @@ class _NextPageState extends State<NextPage> {
                 '緯度: ${position.latitude}, 経度: ${position.longitude} (モバイル)';
             _manualLatitude = position.latitude.toString();
             _manualLongitude = position.longitude.toString();
+            // コントローラへ反映
+            _latitudeController.text = _manualLatitude;
+            _longitudeController.text = _manualLongitude;
           });
         } else {
           // linux/windows desktop usually does not have GPS chip, so make no sense to get location
@@ -407,35 +412,67 @@ class _NextPageState extends State<NextPage> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _selectedImages.isEmpty
-                    ? const Text('画像が選択されていません')
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedImages.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final imageFile = entry.value;
-                          return Stack(
-                            alignment: Alignment.topRight,
-                            children: [
-                              Image.file(
-                                imageFile,
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.grey),
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedImages.removeAt(index);
-                                  });
-                                },
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
+                child: kIsWeb
+                    // ▼ ここでWeb用表示を
+                    ? _selectedImageBytes.isEmpty
+                        ? const Text('画像が選択されていません')
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _selectedImageBytes.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final imageBytes = entry.value;
+                              return Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  Image.memory(
+                                    imageBytes,
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.grey),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedImageBytes.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          )
+                    // ▼ ここでモバイル・デスクトップ用表示を
+                    : _selectedImages.isEmpty
+                        ? const Text('画像が選択されていません')
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _selectedImages.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final imageFile = entry.value;
+                              return Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  Image.file(
+                                    imageFile,
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.grey),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedImages.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
               ),
             ],
           ),
@@ -455,6 +492,7 @@ class _NextPageState extends State<NextPage> {
 
           const SizedBox(height: 16),
           TextFormField(
+            controller: _latitudeController,
             decoration: const InputDecoration(
               labelText: '緯度',
               border: OutlineInputBorder(),
@@ -466,6 +504,7 @@ class _NextPageState extends State<NextPage> {
           ),
           const SizedBox(height: 16),
           TextFormField(
+            controller: _longitudeController,
             decoration: const InputDecoration(
               labelText: '経度',
               border: OutlineInputBorder(),
@@ -479,16 +518,102 @@ class _NextPageState extends State<NextPage> {
           const SizedBox(height: 16),
           // 送信ボタン
           ElevatedButton(
-            onPressed: () {
-              debugPrint('Disaster: $_selectedDisaster');
+            onPressed: () async {
+              if (_selectedDisaster == null) {
+                setState(() {
+                  _disasterSubmitResponseMessage = '災害が未選択です。';
+                });
+                return;
+              }
+              double? lat = double.tryParse(_manualLatitude);
+              double? lng = double.tryParse(_manualLongitude);
+
+              if (lat == null || lng == null) {
+                setState(() {
+                  _disasterSubmitResponseMessage = '緯度・経度を数値で入力してください。';
+                });
+                return;
+              }
+
+              // デバッグ用ログ（あとで削除可能）
+              debugPrint('Disaster: ${_selectedDisaster.toString()}');
               debugPrint('Description: $_description');
               debugPrint('Is Important: $_isImportant');
               debugPrint('Importance: $_importance');
-              debugPrint('Images: $_selectedImages');
-              debugPrint('Manual Position -> Lat: $_manualLatitude, Lng: $_manualLongitude');
-              setState(() {
-                _disasterSubmitResponseMessage = '送信しました';
-              });
+              if (kIsWeb) {
+                debugPrint('Selected Bytes: $_selectedImageBytes');
+              } else {
+                debugPrint('Selected Files: $_selectedImages');
+              }
+              debugPrint('Manual Position -> Lat: $lat, Lng: $lng');
+
+              // 送信先のURL (テスト用や本番用で書き換えてください)
+              final url = Uri.parse('http://localhost:8000/disaster_report');
+
+              // サーバーへ送るデータを組み立てる
+              // 画像は簡易的に Base64 化して送る方法の一例をコメントで示します。
+              // マルチパート送信が必要な場合は http.MultipartRequest を使用してください。
+              Map<String, dynamic> requestData = {
+                'disaster': _selectedDisaster.toString(), // enum->String 変換の一例
+                'description': _description,
+                'isImportant': _isImportant,
+                'importance': _importance,
+                'location': {
+                  'latitude': lat,
+                  'longitude': lng,
+                },
+              };
+
+              // 画像を Base64 文字列として送る場合（Web かモバイルで処理を分ける例）
+              if (kIsWeb) {
+                // Web 向け： Uint8List を Base64 エンコード
+                List<String> base64Images = _selectedImageBytes.map((bytes) {
+                  return base64Encode(bytes);
+                }).toList();
+
+                requestData['images'] = base64Images;
+              } else {
+                // モバイル・デスクトップ向け： File -> Uint8List -> Base64
+                List<String> base64Images = [];
+                for (File file in _selectedImages) {
+                  final bytes = await file.readAsBytes();
+                  base64Images.add(base64Encode(bytes));
+                }
+                requestData['images'] = base64Images;
+              }
+
+              // 実際に HTTP POST リクエストを送信
+              try {
+                final response = await http.post(
+                  url,
+                  headers: {'Content-Type': 'application/json'},
+                  body: json.encode(requestData),
+                );
+
+                if (response.statusCode == 200) {
+                  final data = json.decode(response.body);
+                  if (data['success'] == true) {
+                    // 送信成功時の処理
+                    setState(() {
+                      // also show the response message with data['message']
+                      _disasterSubmitResponseMessage = '送信に成功しました。';
+                    });
+                  } else {
+                    setState(() {
+                      _disasterSubmitResponseMessage = '送信に失敗しました。';
+                    });
+                  }
+                } else {
+                  setState(() {
+                    _disasterSubmitResponseMessage = 'サーバーエラーが発生しました。';
+                  });
+                }
+              } catch (e) {
+                // ネットワークエラーやその他例外時の処理
+                setState(() {
+                  _disasterSubmitResponseMessage = 'ネットワークエラーが発生しました。';
+                });
+              }
             },
             child: const Text('送信'),
           ),
@@ -529,6 +654,7 @@ class _NextPageState extends State<NextPage> {
             _isImportant = false;
             _importance = 5;
             _selectedImages = [];
+            _selectedImageBytes = [];
             _locationMessage = '位置情報は取得されていません';
             _manualLatitude = '';
             _manualLongitude = '';

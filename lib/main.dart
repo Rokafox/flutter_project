@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +9,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'dart:math' show asin, cos, sin, sqrt;
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:csv/csv.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +19,7 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,7 +36,7 @@ class MyApp extends StatelessWidget {
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-  
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -41,14 +44,14 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
-  bool _isLoading = false;  // ローディング中フラグ
-  String? _errorMessage;    // エラーメッセージ
-  
+
+  bool _isLoading = false; // ローディング中フラグ
+  String? _errorMessage; // エラーメッセージ
+
   Future<void> _login() async {
     final code = _codeController.text.trim();
     final password = _passwordController.text.trim();
-    
+
     // 入力検証 (例: 空チェック)
     if (code.isEmpty || password.isEmpty) {
       setState(() {
@@ -70,16 +73,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
       // use a local server for testing
-      final url = Uri.parse('http://localhost:8000/login');  
+      final url = Uri.parse('http://localhost:8000/login');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'code': code, 'password': password}),
       );
-      
+
       if (response.statusCode == 200) {
         // 例: {"success": true, "token": "xxxxxx"} など
         final data = json.decode(response.body);
@@ -110,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,7 +196,7 @@ enum DisasterType {
   volcanicEruption('火山噴火'),
   humanerror('人為事故'),
   bearassault('熊襲撃'),
-  militaryattack('軍事襲撃'),
+  militaryattack('軍事攻撃'),
   nuclearcontamination('核汚染'),
   other('その他');
 
@@ -206,6 +209,39 @@ class NextPage extends StatefulWidget {
 
   @override
   State<NextPage> createState() => _NextPageState();
+}
+
+class Disaster {
+  String name;
+  double latitude;
+  double longitude;
+  // ざっくりした所在地を表すフィールド
+  String? notsoaccuratelocation;
+
+  Disaster({
+    required this.name,
+    required this.latitude,
+    required this.longitude,
+    this.notsoaccuratelocation,
+  });
+}
+
+class CityData {
+  final String citycode;
+  final String prefname;
+  final String cityName1; 
+  final String cityName2;
+  final double lat;
+  final double lng;
+
+  CityData({
+    required this.citycode,
+    required this.prefname,
+    required this.cityName1,
+    required this.cityName2,
+    required this.lat,
+    required this.lng,
+  });
 }
 
 class _NextPageState extends State<NextPage> {
@@ -328,7 +364,7 @@ class _NextPageState extends State<NextPage> {
         throw Exception('位置情報の権限が拒否されました。');
       }
     }
-    
+
     // 永久に拒否されている場合
     if (permission == LocationPermission.deniedForever) {
       // 権限許可画面を開くなどの案内が必要
@@ -340,10 +376,11 @@ class _NextPageState extends State<NextPage> {
   }
 
   Widget _buildReportForm() {
-    final List<DropdownMenuEntry<DisasterType>> disasterEntries = DisasterType.values
+    final List<DropdownMenuEntry<DisasterType>> disasterEntries = DisasterType
+        .values
         .map((d) => DropdownMenuEntry<DisasterType>(value: d, label: d.label))
         .toList();
-        
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -385,26 +422,26 @@ class _NextPageState extends State<NextPage> {
               });
             },
           ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            const Text('重要度:'),
-            Expanded(
-              child: Slider(
-                value: _importance.toDouble(),
-                min: 1,
-                max: 10,
-                divisions: 9,
-                label: _importance.toString(),
-                onChanged: (double value) {
-                  setState(() {
-                    _importance = value.toInt();
-                  });
-                },
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Text('重要度:'),
+              Expanded(
+                child: Slider(
+                  value: _importance.toDouble(),
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  label: _importance.toString(),
+                  onChanged: (double value) {
+                    setState(() {
+                      _importance = value.toInt();
+                    });
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -421,7 +458,10 @@ class _NextPageState extends State<NextPage> {
                         : Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: _selectedImageBytes.asMap().entries.map((entry) {
+                            children: _selectedImageBytes
+                                .asMap()
+                                .entries
+                                .map((entry) {
                               final index = entry.key;
                               final imageBytes = entry.value;
                               return Stack(
@@ -434,7 +474,8 @@ class _NextPageState extends State<NextPage> {
                                     fit: BoxFit.cover,
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.grey),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.grey),
                                     onPressed: () {
                                       setState(() {
                                         _selectedImageBytes.removeAt(index);
@@ -451,7 +492,8 @@ class _NextPageState extends State<NextPage> {
                         : Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: _selectedImages.asMap().entries.map((entry) {
+                            children:
+                                _selectedImages.asMap().entries.map((entry) {
                               final index = entry.key;
                               final imageFile = entry.value;
                               return Stack(
@@ -464,7 +506,8 @@ class _NextPageState extends State<NextPage> {
                                     fit: BoxFit.cover,
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.grey),
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.grey),
                                     onPressed: () {
                                       setState(() {
                                         _selectedImages.removeAt(index);
@@ -629,77 +672,313 @@ class _NextPageState extends State<NextPage> {
   final MapController _mapController = MapController();
   // 初期位置・ズーム
   final LatLng _initialCenter = const LatLng(38.0, 140.0);
-  final double _initialZoom = 6.0;
+  final double _initialZoom = 5.2;
   List<Marker> _markers = [];
+  List<Disaster> _disasterData = [];
+
+  void _updateMarkersFromDisasterData() {
+    setState(() {
+      _markers = _disasterData.map((disaster) {
+        return Marker(
+          point: LatLng(disaster.latitude, disaster.longitude),
+          width: 80,
+          height: 80,
+          // ここでは簡易的に FlutterLogo を表示
+          child: const FlutterLogo(),
+        );
+      }).toList();
+    });
+  }
+
+  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    // 地球上の2点(緯度・経度)間の距離を求める(単位: km)
+    const double earthRadius = 6371.0; // 地球の半径(km)
+    double dLat = _degToRad(lat2 - lat1);
+    double dLon = _degToRad(lon2 - lon1);
+
+    double a = 
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degToRad(lat1)) * cos(_degToRad(lat2)) *
+            sin(dLon / 2) * sin(dLon / 2);
+    double c = 2 * asin(sqrt(a));
+    return earthRadius * c;
+  }
+
+  double _degToRad(double degree) {
+    return degree * (3.141592653589793 / 180.0);
+  }
+
+  Future<void> _getnotsoaccurateLocationbyReadingCSV() async {
+    // read citylldata.csv, temper with each disaster in _disasterData and add this:
+    // disaster.notsoaccuratelocation = "北海道札幌市中央区"
+    // the csv looks like this:
+    // citycode,prefname,citynNme1,citynNme2, lat,lng
+    // 011011,北海道,札幌市,中央区,43.055460,141.340956
+    // 011029,北海道,札幌市,北区,43.090850,141.340831
+    // 011037,北海道,札幌市,東区,43.076069,141.363722
+    // 011045,北海道,札幌市,白石区,43.047687,141.405078
+    // 011053,北海道,札幌市,豊平区,43.031291,141.380106
+    // 011061,北海道,札幌市,南区,42.990031,141.353497
+    // 011070,北海道,札幌市,西区,43.074470,141.300889
+    // 012025,北海道,函館市,,41.768793,140.728810
+    // we will need to find the nearest city to the disaster location
+    try {
+      // 1. CSV ファイルを読み込む（例: assets/citylldata.csv）
+      final csvString = await rootBundle.loadString('assets/citylldata.csv');
+
+      // 2. CSV をパースする
+      //    デフォルトでカンマ区切り。改行は \n として扱う設定を例示
+      List<List<dynamic>> csvTable = const CsvToListConverter().convert(
+        csvString,
+        eol: '\n',
+      );
+
+      // 先頭行がヘッダの場合は削除
+      // citycode,prefname,citynNme1,citynNme2,lat,lng
+      // といったヘッダが入っているなら removeAt(0) する
+      if (csvTable.isNotEmpty) {
+        // 先頭行がヘッダ（文字列）かどうか簡易チェック
+        if (csvTable.first[0].toString() == 'citycode') {
+          csvTable.removeAt(0);
+        }
+      }
+
+      // 3. CityData のリストを作成
+      final List<CityData> cityList = csvTable.map((row) {
+        return CityData(
+          citycode: row[0].toString(),
+          prefname: row[1]?.toString() ?? '',
+          cityName1: row[2]?.toString() ?? '',
+          cityName2: row[3]?.toString() ?? '',
+          lat: (row[4] is num) ? row[4].toDouble() : double.tryParse(row[4].toString()) ?? 0.0,
+          lng: (row[5] is num) ? row[5].toDouble() : double.tryParse(row[5].toString()) ?? 0.0,
+        );
+      }).toList();
+
+      // 4. _disasterData の各災害について、最寄りの市区町村を検索
+      for (final disaster in _disasterData) {
+        CityData? nearestCity;
+        double? nearestDistance; // これまでで一番近い距離を記録する
+
+        for (final city in cityList) {
+          final distance = calculateDistance(
+            disaster.latitude,
+            disaster.longitude,
+            city.lat,
+            city.lng,
+          );
+          if (nearestDistance == null || distance < nearestDistance) {
+            nearestCity = city;
+            nearestDistance = distance;
+          }
+        }
+
+        // 5. 最寄りの市区町村が見つかった場合に、ざっくりした所在地を設定
+        if (nearestCity != null) {
+          disaster.notsoaccuratelocation =
+              '${nearestCity.prefname}${nearestCity.cityName1}${nearestCity.cityName2}';
+        } else {
+          disaster.notsoaccuratelocation = '場所不明';
+        }
+      }
+
+      // ※ ここで setState() を呼んで更新が必要なら呼ぶ
+      setState(() {});
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('CSV読み込みエラー: $e');
+      }
+    }
+  }
+
+  void _removeDisasterthatIsNotInCameraView() {
+    // マップの表示範囲外にある災害情報を削除する
+    final bounds = _mapController.camera.visibleBounds;
+    // debugPrint('Bounds: $bounds');
+    // flutter: Bounds: LatLngBounds(north: 46.28539698115584, south: 28.712606649810624, east: 166.6049459529588, west: 113.35173571382869)
+    setState(() {
+      _disasterData.removeWhere((disaster) {
+        return !bounds.contains(LatLng(disaster.latitude, disaster.longitude));
+      });
+    });
+  }
+
 
   Widget _buildMap() {
-    return Column(
+    return Row(
       children: [
-        // 「request data」ボタン
+        // 左側：アイコン2つ（ツールチップ付き）
         Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+          child: Column(
             children: [
-              ElevatedButton(
-                onPressed: () {
-                  // setState(() {});
-                },
-                child: const Text('データを取得'),
+              Tooltip(
+                message: 'データを取得',
+                child: IconButton(
+                  icon: const Icon(Icons.cloud_download, size: 32),
+                  onPressed: _loadDisasterData,
+                ),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: _loadSampleData,
-                child: const Text('サンプルデータを読み込む'),
+              Tooltip(
+                message: 'サンプルデータ',
+                child: IconButton(
+                  icon: const Icon(Icons.chair, size: 32),
+                  onPressed: _loadSampleData,
+                ),
               ),
             ],
           ),
         ),
-        // flutter_map を利用した地図ウィジェット
+        // 左側: マップ表示部分
         Expanded(
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _initialCenter,
-              initialZoom: _initialZoom,
-            ),
+          flex: 1,
+          child: Column(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'dev.fleaflet.flutter_map.example',
-              ),
-              MarkerLayer(
-                markers: _markers,
+              // 「request data」ボタンやサンプルデータ読込ボタン
+              // Padding(padding: const EdgeInsets.all(4.0)),
+              // flutter_map の地図ウィジェット
+              Expanded(
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _initialCenter,
+                    initialZoom: _initialZoom,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+                    ),
+                    MarkerLayer(
+                      markers: _markers,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+
+        // 右側: 災害情報の一覧表示部分
+        if (_disasterData.isNotEmpty)
+          Expanded(
+            flex: 1,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              itemCount: _disasterData.length, // 例: 災害リストのデータ件数
+              itemBuilder: (context, index) {
+                final disaster = _disasterData[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: ListTile(
+                    title: Text(
+                      '災害: ${disaster.name}\n'
+                      '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
+                      '近隣: ${disaster.notsoaccuratelocation}',
+                    ),
+                    subtitle: const Text('追加情報をここに表示できます'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Show on map button
+                        IconButton(
+                          icon: const Icon(Icons.map),
+                          onPressed: () {
+                            // マップ上で選択した災害の位置に移動
+                            _mapController.move(
+                              LatLng(disaster.latitude, disaster.longitude),
+                              _mapController.camera.zoom
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () {
+                            // 削除処理
+                            // _deleteDisaster(index);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.archive),
+                          onPressed: () {
+                            // アーカイブ処理
+                            // _archiveDisaster(index);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
       ],
     );
   }
 
-  void _loadSampleData() {
+  void _loadDisasterData() {
+    // ここでデータを取得する処理を書く
     setState(() {
-      // 事前に定義しておいたマーカーのリストを格納する
-      _markers = [
-        Marker(
-          point: LatLng(35.6895, 139.6917), // 東京
-          width: 80,
-          height: 80,
-          child: FlutterLogo(),
+      // サンプルデータをセット
+      _disasterData = [
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 35.6895, // 東京
+          longitude: 139.6917,
         ),
-        Marker(
-          point: LatLng(35.0116, 135.7680), // 京都
-          width: 80,
-          height: 80,
-          child: FlutterLogo(),
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 35.0116, // 京都
+          longitude: 135.7680,
         ),
-        Marker(
-          point: LatLng(43.0618, 141.3545), // 札幌
-          width: 80,
-          height: 80,
-          child: FlutterLogo(),
+        Disaster(
+          name: '核汚染',
+          latitude: 34.6937,
+          longitude: 135.5023,
+        ),
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 43.0618, // 札幌
+          longitude: 141.3545,
         ),
       ];
+
+      _removeDisasterthatIsNotInCameraView();
+      _getnotsoaccurateLocationbyReadingCSV();
+      _updateMarkersFromDisasterData();
+    });
+  }
+
+  void _loadSampleData() {
+    setState(() {
+      // サンプルデータをセット
+      _disasterData = [
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 35.6895, // 東京
+          longitude: 139.6917,
+        ),
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 35.0116, // 京都
+          longitude: 135.7680,
+        ),
+        Disaster(
+          name: '核汚染',
+          latitude: 34.6937,
+          longitude: 135.5023,
+        ),
+        Disaster(
+          name: '軍事攻撃',
+          latitude: 43.0618, // 札幌
+          longitude: 141.3545,
+        ),
+      ];
+
+      _getnotsoaccurateLocationbyReadingCSV();
+      _updateMarkersFromDisasterData();
     });
   }
 
@@ -745,6 +1024,7 @@ class _NextPageState extends State<NextPage> {
               _mapController.move(_initialCenter, _initialZoom);
             });
             _markers = [];
+            _disasterData = [];
           }
         },
         destinations: const [

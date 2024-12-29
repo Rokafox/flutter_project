@@ -277,7 +277,7 @@ class Disaster {
 class CityData {
   final String citycode;
   final String prefname;
-  final String cityName1; 
+  final String cityName1;
   final String cityName2;
   final double lat;
   final double lng;
@@ -291,6 +291,96 @@ class CityData {
     required this.lng,
   });
 }
+
+class CrosshairPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.lightGreen
+      ..strokeWidth = 4;
+
+    // Draw vertical line
+    canvas.drawLine(
+      Offset(size.width / 2, 0),
+      Offset(size.width / 2, size.height),
+      paint,
+    );
+
+    // Draw horizontal line
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
+  }
+}
+
+
+// =================================================================================================
+// Helper functions
+// =================================================================================================
+
+double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  // 地球上の2点(緯度・経度)間の距離を求める(単位: km)
+  double degToRad(double degree) {
+    return degree * (3.141592653589793 / 180.0);
+  }
+  const double earthRadius = 6371.0; // 地球の半径(km)
+  double dLat = degToRad(lat2 - lat1);
+  double dLon = degToRad(lon2 - lon1);
+
+  double a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(degToRad(lat1)) *
+          cos(degToRad(lat2)) *
+          sin(dLon / 2) *
+          sin(dLon / 2);
+  double c = 2 * asin(sqrt(a));
+  return earthRadius * c;
+}
+
+/// Fileを読み込み、Base64エンコード文字列を返す関数
+Future<String> encodeFileToBase64(File file) async {
+  try {
+    // ファイルのバイナリデータを読み込む
+    final bytes = await file.readAsBytes();
+    // Base64エンコードして文字列を返す
+    return base64Encode(bytes);
+  } catch (e) {
+    rethrow;
+  }
+}
+
+/// Base64文字列からFileを生成し、指定したパスに書き出す関数
+Future<File> decodeBase64ToFile(String base64Str, String filePath) async {
+  try {
+    // Base64文字列をバイナリデータにデコード
+    final decodedBytes = base64Decode(base64Str);
+    // ファイルとして書き出す
+    final file = File(filePath);
+    return await file.writeAsBytes(decodedBytes);
+  } catch (e) {
+    rethrow;
+  }
+}
+
+/// Uint8List（Web等で取得したバイナリ）をBase64文字列に変換
+String encodeBytesToBase64(Uint8List bytes) {
+  return base64Encode(bytes);
+}
+
+/// Base64文字列をUint8Listにデコード
+Uint8List decodeBase64ToBytes(String base64Str) {
+  return base64Decode(base64Str);
+}
+
+// =================================================================================================
+// End of Helper functions
+// =================================================================================================
 
 class _NextPageState extends State<NextPage> {
   int _selectedIndex = 0;
@@ -570,15 +660,61 @@ class _NextPageState extends State<NextPage> {
             ],
           ),
           const SizedBox(height: 16),
-          // 位置情報取得ボタン & メッセージ
-          ElevatedButton(
-            onPressed: () async {
-              await _getCurrentLocation();
-              // ScaffoldMessenger.of(context).showSnackBar(
-              //   SnackBar(content: Text(_locationMessage)),
-              // );
-            },
-            child: const Text('現在地を取得'),
+          Row(
+            // mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton(
+                onPressed: () async {
+                  await _getCurrentLocation();
+                },
+                child: const Text('現在地を取得'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Open a full screen dialog, show flutter_map and 2 buttons: "Use this location" and "Cancel"
+                  // use this location: the record the center of the map to _manualLatitude and _manualLongitude
+                  // cancel: close the dialog
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: const Text('地図上の位置を指定'),
+                        content: SizedBox(
+                          width: 400,
+                          height: 400,
+                          child: _buildOnlytheMap(),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('取消し'),
+                          ),
+
+                          ElevatedButton(
+                            onPressed: () {
+                              // ここで地図の中心位置を取得して、_manualLatitude, _manualLongitude に代入
+                              final center = _mapControllerReportForm.camera.center;
+                              setState(() {
+                                _manualLatitude = center.latitude.toString();
+                                _manualLongitude = center.longitude.toString();
+                                // コントローラへ反映
+                                _latitudeController.text = _manualLatitude;
+                                _longitudeController.text = _manualLongitude;
+                              });
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('確定'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+                child: const Text('地図で場所を指定'),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(_locationMessage),
@@ -629,15 +765,15 @@ class _NextPageState extends State<NextPage> {
               }
 
               // デバッグ用ログ（あとで削除可能）
-              debugPrint('Disaster: ${_selectedDisaster.toString()}');
+              debugPrint('Disaster: ${_selectedDisaster?.label}'); // tsunami
               debugPrint('Description: $_description');
               debugPrint('Is Important: $_isImportant');
               debugPrint('Importance: $_importance');
-              if (kIsWeb) {
-                debugPrint('Selected Bytes: $_selectedImageBytes');
-              } else {
-                debugPrint('Selected Files: $_selectedImages');
-              }
+              // if (kIsWeb) {
+              //   debugPrint('Selected Bytes: $_selectedImageBytes');
+              // } else {
+              //   debugPrint('Selected Files: $_selectedImages');
+              // }
               debugPrint('Manual Position -> Lat: $lat, Lng: $lng');
 
               // 送信先のURL (テスト用や本番用で書き換えてください)
@@ -647,7 +783,7 @@ class _NextPageState extends State<NextPage> {
               // 画像は簡易的に Base64 化して送る方法の一例をコメントで示します。
               // マルチパート送信が必要な場合は http.MultipartRequest を使用してください。
               Map<String, dynamic> requestData = {
-                'disaster': _selectedDisaster.toString(), // enum->String 変換の一例
+                'disaster': _selectedDisaster?.label,
                 'description': _description,
                 'isImportant': _isImportant,
                 'importance': _importance,
@@ -661,7 +797,7 @@ class _NextPageState extends State<NextPage> {
               if (kIsWeb) {
                 // Web 向け： Uint8List を Base64 エンコード
                 List<String> base64Images = _selectedImageBytes.map((bytes) {
-                  return base64Encode(bytes);
+                  return encodeBytesToBase64(bytes);
                 }).toList();
 
                 requestData['images'] = base64Images;
@@ -669,8 +805,8 @@ class _NextPageState extends State<NextPage> {
                 // モバイル・デスクトップ向け： File -> Uint8List -> Base64
                 List<String> base64Images = [];
                 for (File file in _selectedImages) {
-                  final bytes = await file.readAsBytes();
-                  base64Images.add(base64Encode(bytes));
+                  final base64Str = await encodeFileToBase64(file);
+                  base64Images.add(base64Str);
                 }
                 requestData['images'] = base64Images;
               }
@@ -718,6 +854,7 @@ class _NextPageState extends State<NextPage> {
 
   // for building map
   final MapController _mapController = MapController();
+  final MapController _mapControllerReportForm = MapController();
   // 初期位置・ズーム
   final LatLng _initialCenter = const LatLng(38.0, 140.0);
   final double _initialZoom = 5.2;
@@ -737,24 +874,6 @@ class _NextPageState extends State<NextPage> {
         );
       }).toList();
     });
-  }
-
-  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-    // 地球上の2点(緯度・経度)間の距離を求める(単位: km)
-    const double earthRadius = 6371.0; // 地球の半径(km)
-    double dLat = _degToRad(lat2 - lat1);
-    double dLon = _degToRad(lon2 - lon1);
-
-    double a = 
-        sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degToRad(lat1)) * cos(_degToRad(lat2)) *
-            sin(dLon / 2) * sin(dLon / 2);
-    double c = 2 * asin(sqrt(a));
-    return earthRadius * c;
-  }
-
-  double _degToRad(double degree) {
-    return degree * (3.141592653589793 / 180.0);
   }
 
   Future<void> _getnotsoaccurateLocationbyReadingCSV() async {
@@ -799,8 +918,12 @@ class _NextPageState extends State<NextPage> {
           prefname: row[1]?.toString() ?? '',
           cityName1: row[2]?.toString() ?? '',
           cityName2: row[3]?.toString() ?? '',
-          lat: (row[4] is num) ? row[4].toDouble() : double.tryParse(row[4].toString()) ?? 0.0,
-          lng: (row[5] is num) ? row[5].toDouble() : double.tryParse(row[5].toString()) ?? 0.0,
+          lat: (row[4] is num)
+              ? row[4].toDouble()
+              : double.tryParse(row[4].toString()) ?? 0.0,
+          lng: (row[5] is num)
+              ? row[5].toDouble()
+              : double.tryParse(row[5].toString()) ?? 0.0,
         );
       }).toList();
 
@@ -854,7 +977,6 @@ class _NextPageState extends State<NextPage> {
     });
   }
 
-
   Widget _buildMap() {
     return Row(
       children: [
@@ -896,7 +1018,8 @@ class _NextPageState extends State<NextPage> {
                     initialCenter: _initialCenter,
                     initialZoom: _initialZoom,
                     onMapEvent: (MapEvent event) {
-                      if (event is MapEventMoveEnd || event is MapEventScrollWheelZoom) {
+                      if (event is MapEventMoveEnd ||
+                          event is MapEventScrollWheelZoom) {
                         _removeDisasterthatIsNotInCameraView();
                       }
                     },
@@ -919,99 +1042,127 @@ class _NextPageState extends State<NextPage> {
 
         // 右側: 災害情報の一覧表示部分
         // if (_disasterData.isNotEmpty)
-          Expanded(
-            flex: 1,
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              itemCount: _disasterData.length,
-              itemBuilder: (context, index) {
-                final disaster = _disasterData[index];
-                return HoverableCard(
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: ListTile(
-                      title: Text(
-                        '災害: ${disaster.name}\n'
-                        '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
-                        '近隣: ${disaster.notsoaccuratelocation}',
-                      ),
-                      // subtitle: const Text('追加情報をここに表示できます'),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) {
-                              return Scaffold(
-                                appBar: AppBar(
-                                  title: const Text('災害詳細'),
+        Expanded(
+          flex: 1,
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            itemCount: _disasterData.length,
+            itemBuilder: (context, index) {
+              final disaster = _disasterData[index];
+              return HoverableCard(
+                child: Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: ListTile(
+                    title: Text(
+                      '災害: ${disaster.name}\n'
+                      '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
+                      '近隣: ${disaster.notsoaccuratelocation}',
+                    ),
+                    // subtitle: const Text('追加情報をここに表示できます'),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) {
+                            return Scaffold(
+                              appBar: AppBar(
+                                title: const Text('災害詳細'),
+                              ),
+                              body: Center(
+                                // ここで画像や詳細情報を表示
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // 画像を表示する例
+                                    Image.network(
+                                      'https://rokafox.quest/story4/opening_example.png',
+                                      width: 500,
+                                      height: 500,
+                                      fit: BoxFit.cover,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    const Text(
+                                      '災害の追加情報や写真などをここに表示することができます。',
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text('閉じる'),
+                                    ),
+                                  ],
                                 ),
-                                body: Center(
-                                  // ここで画像や詳細情報を表示
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      // 画像を表示する例
-                                      Image.network(
-                                        'https://rokafox.quest/story4/opening_example.png',
-                                        width: 500,
-                                        height: 500,
-                                        fit: BoxFit.cover,
-                                      ),
-                                      const SizedBox(height: 20),
-                                      const Text(
-                                        '災害の追加情報や写真などをここに表示することができます。',
-                                      ),
-                                      const SizedBox(height: 20),
-                                      ElevatedButton(
-                                        onPressed: () {
-                                          Navigator.pop(context);
-                                        },
-                                        child: const Text('閉じる'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                            fullscreenDialog: true, // これで全画面モーダル風になる
-                          ),
-                        );
-                      },
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Show on map button
-                          IconButton(
-                            icon: const Icon(Icons.map),
-                            onPressed: () {
-                              // マップ上で選択した災害の位置に移動
-                              _mapController.move(
+                              ),
+                            );
+                          },
+                          fullscreenDialog: true, // これで全画面モーダル風になる
+                        ),
+                      );
+                    },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Show on map button
+                        IconButton(
+                          icon: const Icon(Icons.map),
+                          iconSize: 24,
+                          onPressed: () {
+                            // マップ上で選択した災害の位置に移動
+                            _mapController.move(
                                 LatLng(disaster.latitude, disaster.longitude),
-                                _mapController.camera.zoom
-                              );
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () {
-                              // 削除処理
-                              // _deleteDisaster(index);
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.archive),
-                            onPressed: () {
-                              // アーカイブ処理
-                              // _archiveDisaster(index);
-                            },
-                          ),
-                        ],
-                      ),
+                                _mapController.camera.zoom);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          iconSize: 24,
+                          onPressed: () {
+                            // 削除処理
+                            // _deleteDisaster(index);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.archive),
+                          iconSize: 24,
+                          onPressed: () {
+                            // アーカイブ処理
+                            // _archiveDisaster(index);
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOnlytheMap() {
+    return Stack(
+      children: [
+        FlutterMap(
+          mapController: _mapControllerReportForm,
+          options: MapOptions(
+            initialCenter: _initialCenter,
+            initialZoom: _initialZoom,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+            ),
+          ],
+        ),
+        Center(
+          child: CustomPaint(
+            size: Size(30, 30), // Adjust the size of the crosshair
+            painter: CrosshairPainter(),
+          ),
+        ),
       ],
     );
   }
@@ -1021,6 +1172,28 @@ class _NextPageState extends State<NextPage> {
   }
 
   void _loadSampleData() {
+    // encode all images to base64 from assets/images_examples with
+    // Future<String> encodeFileToBase64(File file)
+    // Type: Future<String> Function(File)
+
+    // package:flutter_test_application/main.dart
+
+    // Fileを読み込み、Base64エンコード文字列を返す関数
+    // create a dictionary {filename: base64}
+    // then we can add any image to disaster data
+
+    final assetPaths = [
+      'assets/images_examples/sample1.png',
+      'assets/images_examples/sample2.png',
+    ];
+
+    final imagesBase64 = <String, String>{};  // filename: base64 
+    for (final assetPath in assetPaths) {
+      final file = File(assetPath);
+      final base64Str = encodeFileToBase64(file);
+      // imagesBase64[basename(assetPath)] = base64Str;
+    }
+
     setState(() {
       // サンプルデータをセット
       _disasterData = [

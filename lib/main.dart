@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'dart:math' show asin, cos, sin, sqrt;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
+import 'package:path/path.dart' as path;
 
 void main() {
   runApp(const MyApp());
@@ -265,12 +266,14 @@ class Disaster {
   double longitude;
   // ざっくりした所在地を表すフィールド
   String? notsoaccuratelocation;
+  List<String> images = [];
 
   Disaster({
     required this.name,
     required this.latitude,
     required this.longitude,
     this.notsoaccuratelocation,
+    this.images = const [],
   });
 }
 
@@ -1072,13 +1075,21 @@ class _NextPageState extends State<NextPage> {
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // 画像を表示する例
-                                    Image.network(
-                                      'https://rokafox.quest/story4/opening_example.png',
-                                      width: 500,
-                                      height: 500,
-                                      fit: BoxFit.cover,
-                                    ),
+                                    // Example to load network image
+                                    // Image.network(
+                                    //   'https://rokafox.quest/story4/opening_example.png',
+                                    //   width: 500,
+                                    //   height: 500,
+                                    //   fit: BoxFit.cover,
+                                    // ),
+                                    // disaster should have .images, which is a list of base64 strings
+                                    if (disaster.images.isNotEmpty)
+                                      Image.memory(
+                                        decodeBase64ToBytes(disaster.images[0]),
+                                        width: 500,
+                                        height: 300,
+                                        fit: BoxFit.cover,
+                                      ),
                                     const SizedBox(height: 20),
                                     const Text(
                                       '災害の追加情報や写真などをここに表示することができます。',
@@ -1171,51 +1182,47 @@ class _NextPageState extends State<NextPage> {
     // ここでデータを取得する処理を書く
   }
 
-  void _loadSampleData() {
-    // encode all images to base64 from assets/images_examples with
-    // Future<String> encodeFileToBase64(File file)
-    // Type: Future<String> Function(File)
-
-    // package:flutter_test_application/main.dart
-
-    // Fileを読み込み、Base64エンコード文字列を返す関数
-    // create a dictionary {filename: base64}
-    // then we can add any image to disaster data
-
+  Future<void> _loadSampleData() async {
     final assetPaths = [
-      'assets/images_examples/sample1.png',
-      'assets/images_examples/sample2.png',
+      './assets/images_examples/military_vehicle.png',
+      './assets/images_examples/nuclear_waste.jpg',
     ];
 
-    final imagesBase64 = <String, String>{};  // filename: base64 
+    // { filename: base64String } の Map
+    final imagesBase64 = <String, String>{};
+
+    // encodeFileToBase64 は Future<String> なので await する
     for (final assetPath in assetPaths) {
       final file = File(assetPath);
-      final base64Str = encodeFileToBase64(file);
-      // imagesBase64[basename(assetPath)] = base64Str;
+      final base64Str = await encodeFileToBase64(file);
+      imagesBase64[path.basename(assetPath)] = base64Str;
     }
 
     setState(() {
-      // サンプルデータをセット
       _disasterData = [
         Disaster(
           name: '軍事攻撃',
           latitude: 35.6895, // 東京
           longitude: 139.6917,
+          images: [imagesBase64['military_vehicle.png'] ?? ''],
         ),
         Disaster(
           name: '軍事攻撃',
           latitude: 35.0116, // 京都
           longitude: 135.7680,
+          images: [imagesBase64['military_vehicle.png'] ?? ''],
         ),
         Disaster(
           name: '核汚染',
           latitude: 34.6937,
           longitude: 135.5023,
+          images: [imagesBase64['nuclear_waste.jpg'] ?? ''],
         ),
         Disaster(
           name: '軍事攻撃',
           latitude: 43.0618, // 札幌
           longitude: 141.3545,
+          images: [imagesBase64['military_vehicle.png'] ?? ''],
         ),
       ];
       _originalDisasterData = List.from(_disasterData);

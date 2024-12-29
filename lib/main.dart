@@ -266,12 +266,14 @@ class Disaster {
   double longitude;
   // ざっくりした所在地を表すフィールド
   String? notsoaccuratelocation;
+  String? description;
   List<String> images = [];
 
   Disaster({
     required this.name,
     required this.latitude,
     required this.longitude,
+    this.description,
     this.notsoaccuratelocation,
     this.images = const [],
   });
@@ -705,6 +707,7 @@ class _NextPageState extends State<NextPage> {
                                 // コントローラへ反映
                                 _latitudeController.text = _manualLatitude;
                                 _longitudeController.text = _manualLongitude;
+                                _locationMessage = '緯度: ${center.latitude}, 経度: ${center.longitude} (地図)';
                               });
                               Navigator.of(context).pop();
                             },
@@ -1058,7 +1061,8 @@ class _NextPageState extends State<NextPage> {
                   child: ListTile(
                     title: Text(
                       '災害: ${disaster.name}\n'
-                      '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
+                      '緯度: ${disaster.latitude}\n'
+                      '経度: ${disaster.longitude}\n'
                       '近隣: ${disaster.notsoaccuratelocation}',
                     ),
                     // subtitle: const Text('追加情報をここに表示できます'),
@@ -1070,43 +1074,49 @@ class _NextPageState extends State<NextPage> {
                               appBar: AppBar(
                                 title: const Text('災害詳細'),
                               ),
-                              body: Center(
-                                // ここで画像や詳細情報を表示
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Example to load network image
-                                    // Image.network(
-                                    //   'https://rokafox.quest/story4/opening_example.png',
-                                    //   width: 500,
-                                    //   height: 500,
-                                    //   fit: BoxFit.cover,
-                                    // ),
-                                    // disaster should have .images, which is a list of base64 strings
-                                    if (disaster.images.isNotEmpty)
-                                      Image.memory(
-                                        decodeBase64ToBytes(disaster.images[0]),
-                                        width: 500,
-                                        height: 300,
-                                        fit: BoxFit.cover,
+                              body: SingleChildScrollView(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    children: [
+                                      // もし複数枚の画像がある場合はすべて表示
+                                      if (disaster.images.isNotEmpty) 
+                                        ...disaster.images.map((imageBase64) {
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 16.0),
+                                            child: Image.memory(
+                                              decodeBase64ToBytes(imageBase64),
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          );
+                                        }),
+                                      
+                                      // 災害の説明を表示
+                                      const SizedBox(height: 20),
+                                      if (disaster.description != null)
+                                        Text(
+                                          disaster.description ?? '',
+                                          // スタイルは必要に応じて調整
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      
+                                      const SizedBox(height: 20),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                        },
+                                        child: const Text('閉じる'),
                                       ),
-                                    const SizedBox(height: 20),
-                                    const Text(
-                                      '災害の追加情報や写真などをここに表示することができます。',
-                                    ),
-                                    const SizedBox(height: 20),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                      },
-                                      child: const Text('閉じる'),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
                           },
-                          fullscreenDialog: true, // これで全画面モーダル風になる
+                          fullscreenDialog: true,
                         ),
                       );
                     },
@@ -1184,8 +1194,11 @@ class _NextPageState extends State<NextPage> {
 
   Future<void> _loadSampleData() async {
     final assetPaths = [
-      './assets/images_examples/military_vehicle.png',
+      './assets/images_examples/military_vehicle.jpg',
       './assets/images_examples/nuclear_waste.jpg',
+      './assets/images_examples/teddy_bear.jpg',
+      './assets/images_examples/snow.jpg',
+      './assets/images_examples/snow_husky.jpg',
     ];
 
     // { filename: base64String } の Map
@@ -1204,25 +1217,43 @@ class _NextPageState extends State<NextPage> {
           name: '軍事攻撃',
           latitude: 35.6895, // 東京
           longitude: 139.6917,
-          images: [imagesBase64['military_vehicle.png'] ?? ''],
-        ),
-        Disaster(
-          name: '軍事攻撃',
-          latitude: 35.0116, // 京都
-          longitude: 135.7680,
-          images: [imagesBase64['military_vehicle.png'] ?? ''],
+          images: [imagesBase64['military_vehicle.jpg'] ?? ''],
+          description: '東京都で軍事車両が目撃されました。',
         ),
         Disaster(
           name: '核汚染',
           latitude: 34.6937,
           longitude: 135.5023,
           images: [imagesBase64['nuclear_waste.jpg'] ?? ''],
+          description: '放射性廃棄物が漏れ出しました。',
         ),
         Disaster(
-          name: '軍事攻撃',
-          latitude: 43.0618, // 札幌
-          longitude: 141.3545,
-          images: [imagesBase64['military_vehicle.png'] ?? ''],
+          name: '熊襲撃',
+          latitude: 43.82013008282363,
+          longitude: 143.85868562865505,
+          images: [imagesBase64['teddy_bear.jpg'] ?? ''],
+          description: '熊が出没しました。',
+        ),
+        Disaster(
+          name: '熊襲撃',
+          latitude: 43.81444321853834,
+          longitude: 143.90273362448957,
+          images: [imagesBase64['teddy_bear.jpg'] ?? ''],
+          description: '熊が小学校を侵入しました。',
+        ),
+        Disaster(
+          name: '大雪',
+          latitude: 43.19764537767935,
+          longitude: 141.75734214498215,
+          images: [imagesBase64['snow.jpg'] ?? ''],
+          description: '犬が雪に埋もれました。',
+        ),
+        Disaster(
+          name: '大雪',
+          latitude: 43.529597509514225,
+          longitude: 142.1754771492199,
+          images: [imagesBase64['snow_husky.jpg'] ?? ''],
+          description: '雪とハスキー。',
         ),
       ];
       _originalDisasterData = List.from(_disasterData);
@@ -1266,6 +1297,8 @@ class _NextPageState extends State<NextPage> {
             _locationMessage = '位置情報は取得されていません';
             _manualLatitude = '';
             _manualLongitude = '';
+            _latitudeController.text = '';
+            _longitudeController.text = '';
             _disasterSubmitResponseMessage = '';
           } else if (index == 1) {
             // ここで地図の初期表示位置を設定

@@ -25,11 +25,59 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'ログイン画面',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.purpleAccent),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pink),
         useMaterial3: true,
       ),
       home: const LoginScreen(),
       debugShowCheckedModeBanner: true,
+    );
+  }
+}
+
+class HoverableCard extends StatefulWidget {
+  final Widget child;
+
+  const HoverableCard({super.key, required this.child});
+
+  @override
+  HoverableCardState createState() => HoverableCardState();
+}
+
+class HoverableCardState extends State<HoverableCard> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() {
+          _isHovering = true;
+        });
+      },
+      onExit: (_) {
+        setState(() {
+          _isHovering = false;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: _isHovering
+            ? (Matrix4.identity()..scale(1.02))
+            : Matrix4.identity(),
+        // 影を付けるなどのアニメーションもできる
+        decoration: BoxDecoration(
+          boxShadow: _isHovering
+              ? [
+                  BoxShadow(
+                    color: const Color.fromARGB(255, 244, 230, 237),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [],
+        ),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -675,6 +723,7 @@ class _NextPageState extends State<NextPage> {
   final double _initialZoom = 5.2;
   List<Marker> _markers = [];
   List<Disaster> _disasterData = [];
+  List<Disaster> _originalDisasterData = [];
 
   void _updateMarkersFromDisasterData() {
     setState(() {
@@ -797,6 +846,8 @@ class _NextPageState extends State<NextPage> {
     // debugPrint('Bounds: $bounds');
     // flutter: Bounds: LatLngBounds(north: 46.28539698115584, south: 28.712606649810624, east: 166.6049459529588, west: 113.35173571382869)
     setState(() {
+      // assigin original disaster data to disaster data
+      _disasterData = List.from(_originalDisasterData);
       _disasterData.removeWhere((disaster) {
         return !bounds.contains(LatLng(disaster.latitude, disaster.longitude));
       });
@@ -844,6 +895,11 @@ class _NextPageState extends State<NextPage> {
                   options: MapOptions(
                     initialCenter: _initialCenter,
                     initialZoom: _initialZoom,
+                    onMapEvent: (MapEvent event) {
+                      if (event is MapEventMoveEnd || event is MapEventScrollWheelZoom) {
+                        _removeDisasterthatIsNotInCameraView();
+                      }
+                    },
                   ),
                   children: [
                     TileLayer(
@@ -862,52 +918,94 @@ class _NextPageState extends State<NextPage> {
         ),
 
         // 右側: 災害情報の一覧表示部分
-        if (_disasterData.isNotEmpty)
+        // if (_disasterData.isNotEmpty)
           Expanded(
             flex: 1,
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              itemCount: _disasterData.length, // 例: 災害リストのデータ件数
+              itemCount: _disasterData.length,
               itemBuilder: (context, index) {
                 final disaster = _disasterData[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    title: Text(
-                      '災害: ${disaster.name}\n'
-                      '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
-                      '近隣: ${disaster.notsoaccuratelocation}',
-                    ),
-                    subtitle: const Text('追加情報をここに表示できます'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Show on map button
-                        IconButton(
-                          icon: const Icon(Icons.map),
-                          onPressed: () {
-                            // マップ上で選択した災害の位置に移動
-                            _mapController.move(
-                              LatLng(disaster.latitude, disaster.longitude),
-                              _mapController.camera.zoom
-                            );
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () {
-                            // 削除処理
-                            // _deleteDisaster(index);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.archive),
-                          onPressed: () {
-                            // アーカイブ処理
-                            // _archiveDisaster(index);
-                          },
-                        ),
-                      ],
+                return HoverableCard(
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: ListTile(
+                      title: Text(
+                        '災害: ${disaster.name}\n'
+                        '緯度: ${disaster.latitude}, 経度: ${disaster.longitude}\n'
+                        '近隣: ${disaster.notsoaccuratelocation}',
+                      ),
+                      // subtitle: const Text('追加情報をここに表示できます'),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) {
+                              return Scaffold(
+                                appBar: AppBar(
+                                  title: const Text('災害詳細'),
+                                ),
+                                body: Center(
+                                  // ここで画像や詳細情報を表示
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // 画像を表示する例
+                                      Image.network(
+                                        'https://rokafox.quest/story4/opening_example.png',
+                                        width: 500,
+                                        height: 500,
+                                        fit: BoxFit.cover,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      const Text(
+                                        '災害の追加情報や写真などをここに表示することができます。',
+                                      ),
+                                      const SizedBox(height: 20),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                        },
+                                        child: const Text('閉じる'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                            fullscreenDialog: true, // これで全画面モーダル風になる
+                          ),
+                        );
+                      },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Show on map button
+                          IconButton(
+                            icon: const Icon(Icons.map),
+                            onPressed: () {
+                              // マップ上で選択した災害の位置に移動
+                              _mapController.move(
+                                LatLng(disaster.latitude, disaster.longitude),
+                                _mapController.camera.zoom
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () {
+                              // 削除処理
+                              // _deleteDisaster(index);
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.archive),
+                            onPressed: () {
+                              // アーカイブ処理
+                              // _archiveDisaster(index);
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -920,35 +1018,6 @@ class _NextPageState extends State<NextPage> {
 
   void _loadDisasterData() {
     // ここでデータを取得する処理を書く
-    setState(() {
-      // サンプルデータをセット
-      _disasterData = [
-        Disaster(
-          name: '軍事攻撃',
-          latitude: 35.6895, // 東京
-          longitude: 139.6917,
-        ),
-        Disaster(
-          name: '軍事攻撃',
-          latitude: 35.0116, // 京都
-          longitude: 135.7680,
-        ),
-        Disaster(
-          name: '核汚染',
-          latitude: 34.6937,
-          longitude: 135.5023,
-        ),
-        Disaster(
-          name: '軍事攻撃',
-          latitude: 43.0618, // 札幌
-          longitude: 141.3545,
-        ),
-      ];
-
-      _removeDisasterthatIsNotInCameraView();
-      _getnotsoaccurateLocationbyReadingCSV();
-      _updateMarkersFromDisasterData();
-    });
   }
 
   void _loadSampleData() {
@@ -976,7 +1045,7 @@ class _NextPageState extends State<NextPage> {
           longitude: 141.3545,
         ),
       ];
-
+      _originalDisasterData = List.from(_disasterData);
       _getnotsoaccurateLocationbyReadingCSV();
       _updateMarkersFromDisasterData();
     });
@@ -1025,6 +1094,7 @@ class _NextPageState extends State<NextPage> {
             });
             _markers = [];
             _disasterData = [];
+            _originalDisasterData = [];
           }
         },
         destinations: const [

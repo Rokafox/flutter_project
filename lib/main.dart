@@ -1193,6 +1193,8 @@ class _NextPageState extends State<NextPage> {
   }
 
   Future<void> _loadSampleData() async {
+    // For sample data, simply load some images from assets and encode them to base64
+    // In production, server will send the base64 string
     final assetPaths = [
       './assets/images_examples/military_vehicle.jpg',
       './assets/images_examples/nuclear_waste.jpg',

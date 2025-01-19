@@ -1205,7 +1205,7 @@ class _NextPageState extends State<NextPage> {
     // サンプルデータの場合は削除しない
     if (disaster.isSampleData) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('サンプルデータは削除できません。')),
+        const SnackBar(content: Text('サンプルデータは削除できません。'), duration: Duration(seconds: 1),),
       );
       return;
     }
@@ -1227,7 +1227,7 @@ class _NextPageState extends State<NextPage> {
         // SnackBarを表示して成功メッセージを通知
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('削除に成功しました。')),
+            const SnackBar(content: Text('削除に成功しました。'), duration: Duration(seconds: 1),),
           );
         }
       } else {
@@ -1240,6 +1240,7 @@ class _NextPageState extends State<NextPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('削除に失敗しました: ステータスコード ${response.statusCode}'),
+              duration: Duration(seconds: 1),
             ),
           );
         }

@@ -12,7 +12,8 @@ import 'package:latlong2/latlong.dart';
 import 'dart:math' show asin, cos, sin, sqrt;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
-import 'package:path/path.dart' as path;
+// import 'package:path/path.dart' as path;
+import 'package:flutter_rating_stars/flutter_rating_stars.dart';
 
 void main() {
   runApp(const MyApp());
@@ -24,7 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ログイン画面',
+      title: 'Disaster Report App',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.pink),
         useMaterial3: true,
@@ -271,11 +272,17 @@ class Disaster {
   int? id; // Optional id field
   // Optional isSampleData field
   bool isSampleData = false;
+  // Required importance field, a integer from 1 to 10
+  int importance;
+  // Required datetime field
+  DateTime datetime;
 
   Disaster({
     required this.name,
     required this.latitude,
     required this.longitude,
+    required this.importance,
+    required this.datetime,
     this.description,
     this.notsoaccuratelocation,
     this.images = const [],
@@ -354,6 +361,7 @@ double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 }
 
 /// Fileを読み込み、Base64エンコード文字列を返す関数
+/// Fileを読み込み、Base64エンコード文字列を返す関数
 Future<String> encodeFileToBase64(File file) async {
   try {
     // ファイルのバイナリデータを読み込む
@@ -363,6 +371,12 @@ Future<String> encodeFileToBase64(File file) async {
   } catch (e) {
     rethrow;
   }
+}
+
+Future<String> encodeAssetToBase64(String assetPath) async {
+  final ByteData data = await rootBundle.load(assetPath);
+  final Uint8List bytes = data.buffer.asUint8List();
+  return base64Encode(bytes);
 }
 
 /// Base64文字列からFileを生成し、指定したパスに書き出す関数
@@ -1052,6 +1066,7 @@ class _NextPageState extends State<NextPage> {
         ),
 
         // 右側: 災害情報の一覧表示部分
+        // if (_disasterData.isNotEmpty)
         Expanded(
           flex: 1,
           child: ListView.builder(
@@ -1063,12 +1078,34 @@ class _NextPageState extends State<NextPage> {
                 child: Card(
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   child: ListTile(
-                    title: Text(
-                      '災害: ${disaster.name}\n'
-                      '緯度: ${disaster.latitude}\n'
-                      '経度: ${disaster.longitude}\n'
-                      '近隣: ${disaster.notsoaccuratelocation}',
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('災害: ${disaster.name}'),
+                    // 重要度を星で表示
+                    Row(
+                      children: [
+                        const Text('重要度: '),
+                        RatingStars(
+                          value: disaster.importance.toDouble(), // 1〜10 の値を double に変換
+                          starCount: 10,                         // 星の数を 10 個に設定
+                          maxValue: 10,                          // 最大値を 10 に設定
+                          starSize: 20,                          // 星アイコンのサイズ
+                          starSpacing: 2,                        // 星同士の間隔
+                          // onValueChanged: (v) {
+                          //   // ユーザーがタップして変更できるようにするならこちらを実装
+                          // },
+                          // readOnly: true,                        // 表示だけにしたい場合は true
+                          valueLabelVisibility: false,           // 数値ラベルは非表示
+                          starColor: Colors.yellow,              // 星の色
+                          starOffColor: const Color(0xffe7e8ea), // 星が埋まっていないときの色
+                        ),
+                      ],
                     ),
+                    Text('近隣: ${disaster.notsoaccuratelocation}'),
+                    Text('日時: ${disaster.datetime}'),
+                  ],
+                ),
                     // subtitle: const Text('追加情報をここに表示できます'),
                     onTap: () {
                       Navigator.of(context).push(
@@ -1295,8 +1332,9 @@ class _NextPageState extends State<NextPage> {
       final response = await http.get(Uri.parse('http://localhost:8000/disaster'));
 
       if (response.statusCode == 200) {
+        final decodedBody = utf8.decode(response.bodyBytes);
         // レスポンスボディをJSONとしてデコード
-        final responseData = jsonDecode(response.body);
+        final responseData = jsonDecode(decodedBody);
 
         // responseData は { "success": true, "reports": [ ... ] } の形を想定
         final List<dynamic> reportList = responseData["reports"];
@@ -1319,6 +1357,10 @@ class _NextPageState extends State<NextPage> {
           final String description = report["description"] ?? "";
           // report_id as id
           final int id = report["report_id"] ?? "";
+          // integer importace
+          final int importance = report["importance"] ?? 0;
+          // Datetime datetime
+          final DateTime datetime = report["datetime"] ?? "";
           
           return Disaster(
             name: name,
@@ -1327,6 +1369,8 @@ class _NextPageState extends State<NextPage> {
             images: images,
             description: description,
             id: id,
+            importance: importance,
+            datetime: datetime,
           );
         }).toList();
 
@@ -1356,24 +1400,24 @@ class _NextPageState extends State<NextPage> {
     }
   }
 
+  // For sample data, simply load some images from assets and encode them to base64
+  // In production, server will send the base64 string
   Future<void> _loadSampleData() async {
-    // For sample data, simply load some images from assets and encode them to base64
-    // In production, server will send the base64 string
     final assetPaths = [
-      './assets/images_examples/military_vehicle.jpg',
-      './assets/images_examples/nuclear_waste.jpg',
-      './assets/images_examples/teddy_bear.jpg',
-      './assets/images_examples/snow.jpg',
-      './assets/images_examples/snow_husky.jpg',
+      'assets/images_examples/military_vehicle.jpg',
+      'assets/images_examples/nuclear_waste.jpg',
+      'assets/images_examples/teddy_bear.jpg',
+      'assets/images_examples/snow.jpg',
+      'assets/images_examples/snow_husky.jpg',
     ];
 
-    // { filename: base64String } の Map
     final imagesBase64 = <String, String>{};
 
     for (final assetPath in assetPaths) {
-      final file = File(assetPath);
-      final base64Str = await encodeFileToBase64(file);
-      imagesBase64[path.basename(assetPath)] = base64Str;
+      final base64Str = await encodeAssetToBase64(assetPath);
+      // パスの末尾のファイル名だけ取り出したい場合は、split や正規表現で切り出す
+      final fileName = assetPath.split('/').last;
+      imagesBase64[fileName] = base64Str;
     }
 
     setState(() {
@@ -1385,6 +1429,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['military_vehicle.jpg'] ?? ''],
           description: '東京都で軍事車両が目撃されました。',
           isSampleData: true,
+          importance: 10,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
         Disaster(
           name: '核汚染',
@@ -1393,6 +1439,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['nuclear_waste.jpg'] ?? ''],
           description: '放射性廃棄物が漏れ出しました。',
           isSampleData: true,
+          importance: 10,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
         Disaster(
           name: '熊襲撃',
@@ -1401,6 +1449,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['teddy_bear.jpg'] ?? ''],
           description: '熊が出没しました。',
           isSampleData: true,
+          importance: 2,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
         Disaster(
           name: '熊襲撃',
@@ -1409,6 +1459,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['teddy_bear.jpg'] ?? ''],
           description: '熊が小学校を侵入しました。',
           isSampleData: true,
+          importance: 2,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
         Disaster(
           name: '大雪',
@@ -1417,6 +1469,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['snow.jpg'] ?? ''],
           description: '犬が雪に埋もれました。',
           isSampleData: true,
+          importance: 1,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
         Disaster(
           name: '大雪',
@@ -1425,6 +1479,8 @@ class _NextPageState extends State<NextPage> {
           images: [imagesBase64['snow_husky.jpg'] ?? ''],
           description: '雪とハスキー。',
           isSampleData: true,
+          importance: 1,
+          datetime: DateTime.utc(2022, 1, 1, 12, 0),
         ),
       ];
       _originalDisasterData = List.from(_disasterData);

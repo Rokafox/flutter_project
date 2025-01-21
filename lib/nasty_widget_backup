@@ -1,0 +1,247 @@
+  // Widget _buildMap() {
+  //   return Row(
+  //     children: [
+  //       // 左側：ボタン2つ
+  //       Padding(
+  //         padding: const EdgeInsets.symmetric(horizontal: 4.0),
+  //         child: Column(
+  //           children: [
+  //             Tooltip(
+  //               message: 'データを取得',
+  //               child: IconButton(
+  //                 icon: const Icon(Icons.cloud_download, size: 32),
+  //                 onPressed: _loadDisasterData,
+  //               ),
+  //             ),
+  //             const SizedBox(height: 8),
+  //             Tooltip(
+  //               message: 'サンプルデータ',
+  //               child: IconButton(
+  //                 icon: const Icon(Icons.chair, size: 32),
+  //                 onPressed: _loadSampleData,
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //       // 左側: マップ
+  //       Expanded(
+  //         flex: 1,
+  //         child: Column(
+  //           children: [
+  //             Expanded(
+  //               child: FlutterMap(
+  //                 mapController: _mapController,
+  //                 options: MapOptions(
+  //                   initialCenter: _initialCenter,
+  //                   initialZoom: _initialZoom,
+  //                   onMapEvent: (MapEvent event) {
+  //                     if (event is MapEventMoveEnd ||
+  //                         event is MapEventScrollWheelZoom) {
+  //                       _removeDisasterthatIsNotInCameraView();
+  //                     }
+  //                   },
+  //                 ),
+  //                 children: [
+  //                   TileLayer(
+  //                     urlTemplate:
+  //                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  //                     userAgentPackageName: 'dev.fleaflet.flutter_map.example',
+  //                   ),
+  //                   MarkerLayer(
+  //                     markers: _markers,
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+
+  //       // 右側: 災害情報リスト
+  //       Expanded(
+  //         flex: 1,
+  //         child: Column(
+  //           crossAxisAlignment: CrossAxisAlignment.start,
+  //           children: [
+  //             // ドロップダウンメニューをリストの上に配置
+  //             Padding(
+  //               padding: const EdgeInsets.symmetric(horizontal: 8.0),
+  //               child: DropdownButton<DisasterTypeSort>(
+  //                 value: _currentDisasterSort,
+  //                 onChanged: (DisasterTypeSort? newValue) {
+  //                   if (newValue != null) {
+  //                     _currentDisasterSort = newValue;
+  //                     _sortDisasterData(); // ソートを実行
+  //                   }
+  //                 },
+  //                 items: const [
+  //                   DropdownMenuItem(
+  //                     value: DisasterTypeSort.dateAsc,
+  //                     child: Text('日時（古い順）'),
+  //                   ),
+  //                   DropdownMenuItem(
+  //                     value: DisasterTypeSort.dateDesc,
+  //                     child: Text('日時（新しい順）'),
+  //                   ),
+  //                   DropdownMenuItem(
+  //                     value: DisasterTypeSort.importanceAsc,
+  //                     child: Text('重要度（低い順）'),
+  //                   ),
+  //                   DropdownMenuItem(
+  //                     value: DisasterTypeSort.importanceDesc,
+  //                     child: Text('重要度（高い順）'),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //             // カードリスト
+  //             Expanded(
+  //               child: ListView.builder(
+  //                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
+  //                 itemCount: _disasterData.length,
+  //                 itemBuilder: (context, index) {
+  //                   final disaster = _disasterData[index];
+  //                   return HoverableCard(
+  //                     child: Card(
+  //                       margin: const EdgeInsets.symmetric(vertical: 4.0),
+  //                       child: ListTile(
+  //                         title: Column(
+  //                           crossAxisAlignment: CrossAxisAlignment.start,
+  //                           children: [
+  //                             Text('災害: ${disaster.name}'),
+  //                             // 重要度を星で表示
+  //                             Row(
+  //                               children: [
+  //                                 const Text('重要度: '),
+  //                                 RatingStars(
+  //                                   value: disaster.importance.toDouble(),
+  //                                   starCount: 10,
+  //                                   maxValue: 10,
+  //                                   starSize: 20,
+  //                                   starSpacing: 2,
+  //                                   // onValueChanged: (v) {
+
+  //                                   // },
+  //                                   valueLabelVisibility: false,
+  //                                   starColor: Colors.yellow,
+  //                                   starOffColor: const Color(0xffe7e8ea),
+  //                                 ),
+  //                               ],
+  //                             ),
+  //                             Text('近隣: ${disaster.notsoaccuratelocation}'),
+  //                             Text('日時: ${disaster.datetime}'),
+  //                           ],
+  //                         ),
+  //                         // subtitle: const Text('追加情報をここに表示できます'),
+  //                         onTap: () {
+  //                           Navigator.of(context).push(
+  //                             MaterialPageRoute(
+  //                               builder: (context) {
+  //                                 return Scaffold(
+  //                                   appBar: AppBar(
+  //                                     title: const Text('災害詳細'),
+  //                                   ),
+  //                                   body: SingleChildScrollView(
+  //                                     child: Padding(
+  //                                       padding: const EdgeInsets.all(16.0),
+  //                                       child: Column(
+  //                                         children: [
+  //                                           // もし複数枚の画像がある場合はすべて表示
+  //                                           if (disaster.images.isNotEmpty)
+  //                                             ...disaster.images
+  //                                                 .where((imageBase64) =>
+  //                                                     imageBase64.isNotEmpty)
+  //                                                 .map((imageBase64) {
+  //                                               try {
+  //                                                 return Container(
+  //                                                   margin:
+  //                                                       const EdgeInsets.only(
+  //                                                           bottom: 16.0),
+  //                                                   child: Image.memory(
+  //                                                     decodeBase64ToBytes(
+  //                                                         imageBase64),
+  //                                                     width: double.infinity,
+  //                                                     fit: BoxFit.cover,
+  //                                                   ),
+  //                                                 );
+  //                                               } catch (e) {
+  //                                                 return SizedBox(); // Placeholder for invalid images
+  //                                               }
+  //                                             }),
+  //                                           if (disaster.images.isEmpty)
+  //                                             Text('No images available'),
+
+  //                                           // 災害の説明を表示
+  //                                           const SizedBox(height: 20),
+  //                                           if (disaster.description != null)
+  //                                             Text(
+  //                                               disaster.description ?? '',
+  //                                               // スタイルは必要に応じて調整
+  //                                               style: const TextStyle(
+  //                                                 fontSize: 16,
+  //                                               ),
+  //                                             ),
+
+  //                                           const SizedBox(height: 20),
+  //                                           ElevatedButton(
+  //                                             onPressed: () {
+  //                                               Navigator.pop(context);
+  //                                             },
+  //                                             child: const Text('閉じる'),
+  //                                           ),
+  //                                         ],
+  //                                       ),
+  //                                     ),
+  //                                   ),
+  //                                 );
+  //                               },
+  //                               fullscreenDialog: true,
+  //                             ),
+  //                           );
+  //                         },
+  //                         trailing: Row(
+  //                           mainAxisSize: MainAxisSize.min,
+  //                           children: [
+  //                             // Show on map button
+  //                             IconButton(
+  //                               icon: const Icon(Icons.map),
+  //                               iconSize: 24,
+  //                               onPressed: () {
+  //                                 // マップ上で選択した災害の位置に移動
+  //                                 _mapController.move(
+  //                                     LatLng(disaster.latitude,
+  //                                         disaster.longitude),
+  //                                     _mapController.camera.zoom);
+  //                               },
+  //                             ),
+  //                             IconButton(
+  //                               icon: const Icon(Icons.delete),
+  //                               iconSize: 24,
+  //                               onPressed: () {
+  //                                 // 削除処理
+  //                                 _deleteDisaster(context, index);
+  //                               },
+  //                             ),
+  //                             IconButton(
+  //                               icon: const Icon(Icons.archive),
+  //                               iconSize: 24,
+  //                               onPressed: () {
+  //                                 // アーカイブ処理
+  //                                 // _archiveDisaster(index);
+  //                               },
+  //                             ),
+  //                           ],
+  //                         ),
+  //                       ),
+  //                     ),
+  //                   );
+  //                 },
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
